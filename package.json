@@ -1,0 +1,32 @@
+{
+  "name": "gatsby-create-page-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "nodemon src/server.ts --watch src/ --exec ts-node"
+  },
+  "devDependencies": {
+    "@types/express": "^4.11.1",
+    "@types/node": "^9.6.0",
+    "@types/nodegit": "^0.18.5",
+    "@types/rimraf": "^2.0.2",
+    "nodemon": "^1.17.2",
+    "ts-node": "^5.0.1",
+    "typescript": "^2.7.2"
+  },
+  "dependencies": {
+    "@dschau/create-gatsby-blog-post": "^1.1.0",
+    "@octokit/rest": "^15.2.6",
+    "@types/body-parser": "^1.16.8",
+    "@types/lodash": "^4.14.106",
+    "add": "^2.0.6",
+    "body-parser": "^1.18.2",
+    "express": "^4.16.3",
+    "github-api": "^3.0.0",
+    "lodash": "^4.17.5",
+    "nodegit": "^0.21.2",
+    "rimraf": "^2.6.2",
+    "yarn": "^1.5.1"
+  }
+}
