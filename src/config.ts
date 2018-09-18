@@ -6,7 +6,8 @@ export interface IConfig {
   port: number;
 }
 export const config: IConfig = {
-  blogDirectory: path.resolve(__dirname, '../blog'),
+  blogDirectory: './',
+  // blogDirectory: path.resolve(__dirname, '../blog/src/pages/'),
   blogRepoUrl: 'https://github.com/amagno/amagno-gatsby-blog.git',
-  port: 3000,
+  port: 4000,
 };
