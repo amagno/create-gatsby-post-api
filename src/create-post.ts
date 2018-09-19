@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import { capitalize } from 'lodash';
-import { config } from './config';
 
 interface ITemplateOptions {
   title: string;
@@ -18,14 +17,15 @@ tags: [${(options.tags || []).toString()}]
 ${options.content}
 `;
 
-export const createPost = (title: string, content: string) => new Promise<string>((resolve, reject) => {
+// tslint:disable-next-line:max-line-length
+export const createPost = (title: string, content: string, repoPath: string) => new Promise<string>((resolve, reject) => {
   const postContent = template({
     title,
     content,
   });
   console.log(title, content);
   const sanitizedTitle = title.replace(/\W/g, '').replace(' ', '-');
-  const fullPath = `${config.blogDirectory}/${sanitizedTitle}`;
+  const fullPath = `${repoPath}src/pages/${sanitizedTitle}`;
 
   console.log('creating ====>', fullPath);
   if (fs.existsSync(fullPath)) {

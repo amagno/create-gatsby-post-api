@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { Clone, Repository } from 'nodegit';
+import { Clone as nodegitClone, Repository } from 'nodegit';
 import * as rm from 'rimraf';
 import { config } from './config';
 import * as Octokit from '@octokit/rest';
@@ -36,24 +36,33 @@ export const openBlogRepo = async () => {
   return await Repository.open(config.blogDirectory);
 };
 
-export const cloneBlogRepo =  () => {
-  const loading = twirlTimer();
-  const repo = Clone.clone(config.blogRepoUrl, config.blogDirectory)
-    .then(async (r) => {
-      // process.stdout.write('\r' + 'OK');
-      clearInterval(loading);
-      console.log('\n[ * ] => Done !');
-      const commit = await r.getHeadCommit();
-      console.log('[ * ] => Latest Commit sha: ' + commit.sha());
-      return r;
-    })
-    .catch((e) => {
-      // process.stdout.write('\r' + 'ERROR');
-      clearInterval(loading);
-      throw new Error(e);
-    });
-  return repo;
-};
+// export const cloneBlogRepo =  () => {
+//   const loading = twirlTimer();
+//   const repo = Clone.clone(config.blogRepoUrl, config.blogDirectory)
+//     .then(async (r) => {
+//       // process.stdout.write('\r' + 'OK');
+//       clearInterval(loading);
+//       console.log('\n[ * ] => Done !');
+//       const commit = await r.getHeadCommit();
+//       console.log('[ * ] => Latest Commit sha: ' + commit.sha());
+//       return r;
+//     })
+//     .catch((e) => {
+//       // process.stdout.write('\r' + 'ERROR');
+//       clearInterval(loading);
+//       throw new Error(e);
+//     });
+//   return repo;
+// };
 export const removeBlogDir = () => {
   rm.sync(config.blogDirectory);
+};
+
+export const cloneGithubRepository = async (url: string, name: string) => {
+  const fullPath = `${config.repositoriesDirectory}/${name}`;
+  const exists = await fs.existsSync(fullPath);
+  if (exists) {
+    await rm.sync(fullPath);
+  }
+  return nodegitClone.clone(url, fullPath);
 };
