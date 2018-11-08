@@ -14,6 +14,12 @@ import axios from 'axios';
 import * as rm from 'rimraf';
 import * as jwt from 'jsonwebtoken';
 import * as jwtMiddleware from 'express-jwt';
+import * as http from 'http';
+import * as socket from 'socket.io';
+
+const app = express();
+const server = http.createServer(app);
+const io = socket(server);
 
 const clientId = '37b7f18f970f2b8bb52e';
 const clientSecret = 'd7e8184f691a7e99d8b7598742b7186377e5b0f2';
@@ -26,6 +32,8 @@ interface ICreatePostInput {
 interface IInitRepoInput {
   name: string;
   git_url: string;
+  token: string;
+  owner: string;
 }
 
 const postValidation = joi.object().keys({
@@ -36,6 +44,8 @@ const postValidation = joi.object().keys({
 const initRepoValidation = joi.object().keys({
   name: joi.string().min(3).required(),
   git_url: joi.string().min(3).required(),
+  token: joi.string().required(),
+  owner: joi.string().required()
 });
 
 // MIDDLEWARES
@@ -47,11 +57,16 @@ const validationMiddleware = (joiSchema: joi.ObjectSchema) => (req, res, next) =
   next();
 };
 
+
+
 // INITIALIZE
 if (fs.existsSync(config.repositoriesDirectory)) {
   rm.sync(config.repositoriesDirectory);
+  io.on('connection', () => {
+    io.emit('repositories-removed', { for: 'everyone' });
+  });
 }
-const app = express();
+
 app.use(json());
 app.use(raw());
 app.use(cors());
@@ -63,7 +78,7 @@ app.get('/test', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
 });
 
 // tslint:disable-next-line:max-line-length
-app.post('/post/create', validationMiddleware(postValidation), jwtMiddleware({ secret: tokeSecret }), async (req, res) => {
+app.post('/post', validationMiddleware(postValidation), jwtMiddleware({ secret: tokeSecret }), async (req, res) => {
   const data: ICreatePostInput = req.body;
 
   try {
@@ -77,6 +92,49 @@ app.post('/post/create', validationMiddleware(postValidation), jwtMiddleware({ s
     res.status(400).send(error).end();
   }
 });
+// ler todos os posts (arquivos md) dentro da pasta src/pages e retorna lista
+app.get('/post', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
+  const path = `${req.user.repoPath}src/pages/`;
+  const posts = [];
+
+  fs.readdirSync(path).forEach(file => {
+    const currentPath = path + file;
+    const stat = fs.lstatSync(currentPath);
+
+    if (stat.isDirectory()) {
+      let existIndex = false;
+      fs.readdirSync(currentPath).forEach(md => {
+        if (md === 'index.md') {
+          existIndex = true;
+        }
+      })
+      
+      if (existIndex) {
+        posts.push(file);
+      }
+    }
+  })
+
+  return res.send(posts);
+})
+
+app.get('/post/:postName', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
+  const postName = req.params.postName;
+  if (!postName) {
+    return res.status(400).send('please send name of repo').end();
+  }
+
+  const path = `${req.user.repoPath}src/pages/${postName}/index.md`;
+
+
+  if (!fs.existsSync(path)) {
+    return res.status(500).send(`the path for post ${path} not exists`).end();
+  }
+
+  const file = fs.readFileSync(path);
+
+  return res.status(200).send(file.toString('utf8')).end();
+})
 
 app.get('/github-access-token', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
   return res.status(200).send(req.user.github_token).end();
@@ -87,23 +145,31 @@ app.post('/repository/init', validationMiddleware(initRepoValidation), async (re
   const data: IInitRepoInput = req.body;
 
   try {
-    const repo = await cloneGithubRepository(data.git_url, data.name);
-    const repoPath = repo.path().slice(0, (repo.path().length - 5));
+    const repoPath = await cloneGithubRepository(data.token, data.owner, data.name, data.git_url);
+    // const repoPath = repo.path().slice(0, (repo.path().length - 5));
+    console.log('CREATE', data);
+    console.log(repoPath);
 
     const token = jwt.sign({
       repoPath,
+      token: data.token,
+      name: data.name,
+      owner: data.owner
     }, tokeSecret);
 
     return res.status(200).json({
       token,
       name: data.name,
     }).end();
+
   } catch (error) {
     return res.status(500).send(error).end();
   }
 });
 
 app.get('/oauth/redirect/', async (req, res) => {
+
+  console.log(req.query);
   const requestCode = req.query.code;
 
   if (typeof requestCode !== 'string') {
@@ -137,7 +203,11 @@ app.get('/oauth/redirect/', async (req, res) => {
 
 });
 
+// io.on('connection', () => {
+//   console.log('client connected');
+// });
+
 // LISTEN
-app.listen(config.port, () => {
+server.listen(config.port, () => {
   console.log(`[ * ] => App is running http://localhost:${config.port}`);
 });

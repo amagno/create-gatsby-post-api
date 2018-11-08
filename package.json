@@ -13,6 +13,7 @@
     "@types/node": "^9.6.0",
     "@types/nodegit": "^0.18.5",
     "@types/rimraf": "^2.0.2",
+    "@types/socket.io": "^2.1.0",
     "nodemon": "^1.17.2",
     "ts-node": "^5.0.1",
     "typescript": "^2.7.2"
@@ -40,6 +41,7 @@
     "morgan": "^1.9.1",
     "nodegit": "^0.21.2",
     "rimraf": "^2.6.2",
+    "socket.io": "^2.1.1",
     "yarn": "^1.5.1"
   }
 }

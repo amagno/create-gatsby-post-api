@@ -13,28 +13,30 @@ const twirlTimer = () => {
     x &= 3;
   }, 50);
 };
-export const blogDirExists = fs.existsSync(config.blogDirectory);
+// export const blogDirExists = fs.existsSync(config.blogDirectory);
 
-export const getFirstCommit = async (): Promise<string> => {
+export const getFirstCommit = async (token: string, repoName: string, owner: string): Promise<string> => {
   // const github = new Github({ token: 'c6ab6a59fd0fa2814ab632e2d927c83b7993f0e3' });
   const gh = new Octokit();
   gh.authenticate({
     type: 'token',
-    token: 'c6ab6a59fd0fa2814ab632e2d927c83b7993f0e3',
+    token,
   });
   const response = await gh.repos.getCommits({
-    repo: 'amagno-gatsby-blog',
-    owner: 'amagno',
+    repo: repoName,
+    owner,
   });
   const firstShaCommit = response.data[0].sha;
+
   if (typeof firstShaCommit !== 'string') {
     throw new Error('repository is not valid');
   }
+
   return firstShaCommit;
 };
-export const openBlogRepo = async () => {
-  return await Repository.open(config.blogDirectory);
-};
+// export const openBlogRepo = async () => {
+//   return await Repository.open(config.blogDirectory);
+// };
 
 // export const cloneBlogRepo =  () => {
 //   const loading = twirlTimer();
@@ -54,15 +56,32 @@ export const openBlogRepo = async () => {
 //     });
 //   return repo;
 // };
-export const removeBlogDir = () => {
-  rm.sync(config.blogDirectory);
-};
+// export const removeBlogDir = () => {
+//   rm.sync(config.blogDirectory);
+// };
 
-export const cloneGithubRepository = async (url: string, name: string) => {
-  const fullPath = `${config.repositoriesDirectory}/${name}`;
-  const exists = await fs.existsSync(fullPath);
+export const cloneGithubRepository = async (token: string, owner: string, repoName: string, url: string): Promise<string> => {
+  const path = `${config.repositoriesDirectory}/${repoName}/`;
+  const exists = await fs.existsSync(path);
+
   if (exists) {
-    await rm.sync(fullPath);
+    const repo = await Repository.open(path);
+    const commit = await repo.getReferenceCommit('master');
+    const firstCommit = await getFirstCommit(token, repoName, owner);
+
+    if (commit.sha() === firstCommit) {
+      console.log(`repository ${repoName} is updated!`);
+      return path;
+    }
+
+    rm.sync(path);
   }
-  return nodegitClone.clone(url, fullPath);
+
+  try {
+    await nodegitClone.clone(url, path);
+    return path;
+  } catch (error) {
+    console.log(`Error on clone repository: ${url}`);
+    console.log(error);
+  }
 };
