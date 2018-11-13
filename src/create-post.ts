@@ -25,7 +25,7 @@ export const createPost = (title: string, content: string, repoPath: string) => 
   });
   console.log(title, content);
   const sanitizedTitle = title.replace(/\W/g, '').replace(' ', '-');
-  const fullPath = `${repoPath}src/pages/${sanitizedTitle}`;
+  const fullPath = `${repoPath}/src/pages/${sanitizedTitle}`;
 
   console.log('creating ====>', fullPath);
   if (fs.existsSync(fullPath)) {

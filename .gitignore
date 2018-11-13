@@ -2,3 +2,5 @@ node_modules/
 blog/
 .DS_Store
 repositories/
+__build__/
+.vscode

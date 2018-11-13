@@ -3,6 +3,7 @@ import { Clone as nodegitClone, Repository } from 'nodegit';
 import * as rm from 'rimraf';
 import { config } from './config';
 import * as Octokit from '@octokit/rest';
+import * as nodePath from 'path';
 
 const twirlTimer = () => {
   const P = ['\\', '|', '/', '-'];
@@ -60,8 +61,11 @@ export const getFirstCommit = async (token: string, repoName: string, owner: str
 //   rm.sync(config.blogDirectory);
 // };
 
+// tslint:disable-next-line:max-line-length
 export const cloneGithubRepository = async (token: string, owner: string, repoName: string, url: string): Promise<string> => {
-  const path = `${config.repositoriesDirectory}/${repoName}/`;
+  const path = nodePath.resolve(`${config.repositoriesDirectory}/${repoName}/`);
+  console.log('cloning repository into: ', path);
+
   const exists = await fs.existsSync(path);
 
   if (exists) {

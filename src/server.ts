@@ -1,11 +1,8 @@
 import { cloneGithubRepository } from './repository-functions';
 import * as express from 'express';
 import * as fs from 'fs';
-import * as path from 'path';
 import { config } from './config';
 import { createPost } from './create-post';
-import { runCommandTest } from './commands';
-import { run } from './run';
 import { json, raw } from 'body-parser';
 import * as cors from 'cors';
 import * as logger from 'morgan';
@@ -16,6 +13,8 @@ import * as jwt from 'jsonwebtoken';
 import * as jwtMiddleware from 'express-jwt';
 import * as http from 'http';
 import * as socket from 'socket.io';
+import { deploy } from './queue';
+import { ClientEmitter } from './client-emitter';
 
 const app = express();
 const server = http.createServer(app);
@@ -45,7 +44,7 @@ const initRepoValidation = joi.object().keys({
   name: joi.string().min(3).required(),
   git_url: joi.string().min(3).required(),
   token: joi.string().required(),
-  owner: joi.string().required()
+  owner: joi.string().required(),
 });
 
 // MIDDLEWARES
@@ -57,27 +56,55 @@ const validationMiddleware = (joiSchema: joi.ObjectSchema) => (req, res, next) =
   next();
 };
 
-
-
 // INITIALIZE
-if (fs.existsSync(config.repositoriesDirectory)) {
-  rm.sync(config.repositoriesDirectory);
-  io.on('connection', () => {
-    io.emit('repositories-removed', { for: 'everyone' });
+// if (fs.existsSync(config.repositoriesDirectory)) {
+//   rm.sync(config.repositoriesDirectory);
+//   io.on('connection', () => {
+//     io.emit('repositories-removed', { for: 'everyone' });
+//   });
+// }
+
+const clientEmitter = new ClientEmitter(io);
+
+io.on('connection', (s) => {
+  console.log('connected', s.id);
+  s.join('deploy');
+
+  s.join('clients').on('add', (token) => {
+    clientEmitter.addClient({ token, socketId: s.id });
   });
-}
+
+  s.on('disconnect', () => {
+    clientEmitter.removeClient(s.id);
+  });
+});
 
 app.use(json());
 app.use(raw());
 app.use(cors());
 app.use(logger('dev'));
 
+app.post('/deploy', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
+  const { repoPath, name, githubToken, owner } = req.user;
+  const { url, token } = req.body;
+
+  deploy(clientEmitter.createEmitter(token), {
+    name,
+    path: repoPath,
+    githubToken,
+    url,
+    branch: 'master',
+    owner,
+  });
+  return res.send('Job stated');
+});
+
 app.get('/test', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
   console.log('RETRIEVE SESSION ===> ', req.user);
   res.send(req.user || 'oppppsss');
 });
 
-// tslint:disable-next-line:max-line-length
+// criar novo post md
 app.post('/post', validationMiddleware(postValidation), jwtMiddleware({ secret: tokeSecret }), async (req, res) => {
   const data: ICreatePostInput = req.body;
 
@@ -94,38 +121,37 @@ app.post('/post', validationMiddleware(postValidation), jwtMiddleware({ secret: 
 });
 // ler todos os posts (arquivos md) dentro da pasta src/pages e retorna lista
 app.get('/post', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
-  const path = `${req.user.repoPath}src/pages/`;
+  const path = `${req.user.repoPath}/src/pages/`;
   const posts = [];
 
-  fs.readdirSync(path).forEach(file => {
+  fs.readdirSync(path).forEach((file) => {
     const currentPath = path + file;
     const stat = fs.lstatSync(currentPath);
 
     if (stat.isDirectory()) {
       let existIndex = false;
-      fs.readdirSync(currentPath).forEach(md => {
+      fs.readdirSync(currentPath).forEach((md) => {
         if (md === 'index.md') {
           existIndex = true;
         }
-      })
-      
+      });
+
       if (existIndex) {
         posts.push(file);
       }
     }
-  })
+  });
 
   return res.send(posts);
-})
-
+});
+// lê post conforme nome
 app.get('/post/:postName', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
   const postName = req.params.postName;
   if (!postName) {
     return res.status(400).send('please send name of repo').end();
   }
 
-  const path = `${req.user.repoPath}src/pages/${postName}/index.md`;
-
+  const path = `${req.user.repoPath}/src/pages/${postName}/index.md`;
 
   if (!fs.existsSync(path)) {
     return res.status(500).send(`the path for post ${path} not exists`).end();
@@ -134,11 +160,11 @@ app.get('/post/:postName', jwtMiddleware({ secret: tokeSecret }), (req, res) => 
   const file = fs.readFileSync(path);
 
   return res.status(200).send(file.toString('utf8')).end();
-})
-
-app.get('/github-access-token', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
-  return res.status(200).send(req.user.github_token).end();
 });
+
+// app.get('/github-access-token', jwtMiddleware({ secret: tokeSecret }), (req, res) => {
+//   return res.status(200).send(req.user.github_token).end();
+// });
 
 // tslint:disable-next-line:max-line-length
 app.post('/repository/init', validationMiddleware(initRepoValidation), async (req, res) => {
@@ -152,9 +178,9 @@ app.post('/repository/init', validationMiddleware(initRepoValidation), async (re
 
     const token = jwt.sign({
       repoPath,
-      token: data.token,
+      githubToken: data.token,
       name: data.name,
-      owner: data.owner
+      owner: data.owner,
     }, tokeSecret);
 
     return res.status(200).json({
@@ -166,7 +192,7 @@ app.post('/repository/init', validationMiddleware(initRepoValidation), async (re
     return res.status(500).send(error).end();
   }
 });
-
+// realiza redirect do login do github enviando o access token do github na url
 app.get('/oauth/redirect/', async (req, res) => {
 
   console.log(req.query);
@@ -187,25 +213,13 @@ app.get('/oauth/redirect/', async (req, res) => {
     code: requestCode,
   });
 
-  // const match = response.data.match(/\access_token=(.*)/);
-  // const accessToken =  !!match ? !!match[1] ? match[1].split('&')[0] : undefined : undefined;
   const accessToken =  response.data;
   console.log('ACESSS', accessToken);
   if (!accessToken) {
     return res.status(400).send('error on github response access_token').end();
   }
-
-  // const token = jwt.sign({
-  //   github_token: accessToken,
-  // }, tokeSecret);
-
   return res.redirect(`http://localhost:3000?${accessToken}`);
-
 });
-
-// io.on('connection', () => {
-//   console.log('client connected');
-// });
 
 // LISTEN
 server.listen(config.port, () => {
